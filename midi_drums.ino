@@ -11,7 +11,7 @@
 #define AI2 2//19
 #define AI3 3//18
 
-#define AI_RAW_HIGH 1000 //1030
+#define AI_RAW_HIGH 900 //1030
 #define AI_RAW_LOW 0
 #define AI_EU_HIGH 127
 #define AI_EU_LOW 40
@@ -22,12 +22,12 @@
 //#define AI_LOW_THRESHOLD 2
 #define DRUM_HIT_DEADBAND 20
 //#define DRUM_MIN_HIT 30
-#define DRUM_HIT_ANALYZE 7 //how many values to read
+#define DRUM_HIT_ANALYZE 8 //how many values to read
 #define MIDI_CHANNEL 0
 #define AI_INPUTS_USED 4
 
-#define HIT_CACHE_DURATION 20 //loops cache lasts
-#define FASLE_HIT_DEADBAND 37.0 //Velocity for cached hit to cancel false hit
+#define HIT_CACHE_DURATION 15 //loops cache lasts
+#define FASLE_HIT_DEADBAND 50.0 //Velocity for cached hit to cancel false hit
 
 typedef struct {
   byte AIInputNum;
