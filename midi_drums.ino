@@ -1,9 +1,17 @@
+#include <Bounce.h>
+
+//#include <frequencyToNote.h>
+//#include <MIDIUSB.h>
+//#include <MIDIUSB_Defs.h>
+//#include <pitchToFrequency.h>
+//#include <pitchToNote.h>
+
 /***************************************************************
  * written for a Teensy 2.0
  * Takes 4 AI inputs from Pizo's
  * Processes as drum hits and plays a midi note
  **************************************************************/
-#include "MIDIUSB.h"
+//#include "MIDIUSB.h"
 
 #define NUM_BUTTONS  7
 #define AI0 0//21
@@ -11,29 +19,38 @@
 #define AI2 2//19
 #define AI3 3//18
 
-#define AI_RAW_HIGH 900 //1030
+#define AI_RAW_HIGH 1023 //1030
 #define AI_RAW_LOW 0
 #define AI_EU_HIGH 127
 #define AI_EU_LOW 40
+
+#define AI_HARD_HIT_MODE_VAL 120.0
+#define AI_SOFT_HIT_MODE_VAL 80.0
+#define HARD_HIT_MODE 1
+#define SOFT_HIT_MODE 2
+#define VEL_HIT_MODE 0
 
 #define AI_SMOOTH_CNT 4
 
 //#define AI_HIGH_THRESHOLD 10
 //#define AI_LOW_THRESHOLD 2
-#define DRUM_HIT_DEADBAND 20
+#define DRUM_HIT_DEADBAND 40
 //#define DRUM_MIN_HIT 30
-#define DRUM_HIT_ANALYZE 8 //how many values to read
+#define DRUM_HIT_ANALYZE 4 //how many values to read
 #define MIDI_CHANNEL 0
 #define AI_INPUTS_USED 4
 
-#define HIT_CACHE_DURATION 15 //loops cache lasts
-#define FASLE_HIT_DEADBAND 50.0 //Velocity for cached hit to cancel false hit
+#define HIT_CACHE_DURATION 5 //loops cache lasts
+#define FASLE_HIT_DEADBAND 20.0 //Velocity for cached hit to cancel false hit
+
+
 
 typedef struct {
   byte AIInputNum;
   int AIRaw;
   int AIMaxValue;
   int AILowRawTweak; //used to calibrate for different sensitivities 
+  int AIHighRawTweak; //used to calibrate for different sensitivities 
   //float AIScaled;
   byte AISmoothCntr;
 } AnalogPoint;
@@ -53,13 +70,22 @@ float cachedVelocity = 0.0;
 int cachedVelocityTMR = 0;
 
 
-const int AI_Raw_Low_Override[] = {0,0,0,0}; //Use this for tweaking each input
+const int AI_Raw_Low_Override[] = {0,0,0,0}; //Increases the RawLow Value
+const int AI_Raw_High_Override[] = {0,200,0,0}; //Decreases the HighRaw Value
 
 const int intensityPot = 0;  //A0 input
 const byte notePitches[] = {35, 38, 42, 49};
 int NoteStat;
 int AI_MaxCounter;
 int led = 11;
+int BTN_IN = 10;
+int LED_OUT_1 = 7;
+int LED_OUT_2 = 8;
+int LED_OUT_3 = 9;
+Bounce button10 = Bounce(10, 10); //button 10 for 10 ms
+
+byte hitMode = VEL_HIT_MODE;
+
 
 int last;
 
@@ -67,12 +93,17 @@ void setup() {
   NoteStat = 0;
   AI_MaxCounter = 0;
   pinMode(led, OUTPUT);
+  pinMode(LED_OUT_1, OUTPUT);
+  pinMode(LED_OUT_2, OUTPUT);
+  pinMode(LED_OUT_3, OUTPUT);
+  pinMode(BTN_IN, INPUT_PULLUP); 
   for (int i=0;i<AI_INPUTS_USED;i++){
     AIPoints[i].AIInputNum = AIInputs[i];
     AIPoints[i].AIRaw = 0;
     AIPoints[i].AIMaxValue = 0;
     //AIPoints[i].AIScaled = 0;
     AIPoints[i].AILowRawTweak = AI_Raw_Low_Override[i];
+    AIPoints[i].AIHighRawTweak = AI_Raw_High_Override[i];
     AIPoints[i].AISmoothCntr = AI_SMOOTH_CNT;
     hitDataPoints[i].hitAnalyzeCntr = -1;
     hitDataPoints[i].isHit = false;
@@ -80,6 +111,7 @@ void setup() {
     hitDataPoints[i].lastValue = 0;
   }
   Serial.begin(38400);
+  updateHitModeLights();
 }
 
 void loop() {
@@ -87,9 +119,41 @@ void loop() {
     checkForHits(AIPoints, hitDataPoints);
     sendMIDIForHits(hitDataPoints);  
   }
+  //checkHitModeBTN();
   delay(1);
 }
 
+void checkHitModeBTN(){
+  button10.update();
+  if (button10.fallingEdge()) {
+    changeHitMode();
+  }
+}
+
+void changeHitMode(){
+  hitMode++;
+  if (hitMode >= 3){
+    hitMode = 0;
+  }
+  updateHitModeLights();
+}
+
+void updateHitModeLights(){
+  digitalWrite(LED_OUT_1, 0);
+  digitalWrite(LED_OUT_2, 0);
+  digitalWrite(LED_OUT_3, 0);
+  switch (hitMode){
+    case 0:
+      digitalWrite(LED_OUT_1, 1);
+      break;
+    case 1:
+      digitalWrite(LED_OUT_2, 1);
+      break;
+    case 2:
+      digitalWrite(LED_OUT_3, 1);
+      break;
+  }
+}
 //reads AI and scales input to passed low / high range values
 //processed values go to AI_Processed[]
 bool readAnalogs(AnalogPoint AI_Points[], float highEU, float lowEU){
@@ -143,24 +207,38 @@ void analyzePointForHit(AnalogPoint *point, HitData *hit){
     //hit found, begin analyze
     if (point->AIRaw > (hit->lastValue + point->AILowRawTweak + DRUM_HIT_DEADBAND)){
       hit->hitAnalyzeCntr = DRUM_HIT_ANALYZE;
-      digitalWrite(led, 1);
+      //digitalWrite(led, 1);
     }
     hit->lastValue = point->AIRaw;
   }
   
   if (hit->hitAnalyzeCntr == 0){
     hit->isHit = true;
-    hit->velocity = scaleAI(hit->lastValue, AI_RAW_HIGH, AI_RAW_LOW + point->AILowRawTweak, AI_EU_HIGH, AI_EU_LOW);
+
+    hit->velocity = scaleAI(hit->lastValue, AI_RAW_HIGH - point->AIHighRawTweak, AI_RAW_LOW + point->AILowRawTweak, AI_EU_HIGH, AI_EU_LOW);
+    
     //check if a false hit --feedback from a different hit
     if ((cachedVelocity - hit->velocity) > FASLE_HIT_DEADBAND){
       hit->isHit = false;
     }
     else{
-      digitalWrite(led, 0);
+      hit->velocity = getVeloictyForMode(hit->velocity);
+      //digitalWrite(led, 0);
     }
   }
 }
 
+float getVeloictyForMode(float velocity){
+  switch(hitMode){
+    case VEL_HIT_MODE:
+      return velocity;
+    case HARD_HIT_MODE:
+      return AI_HARD_HIT_MODE_VAL;
+    case SOFT_HIT_MODE:
+      return AI_SOFT_HIT_MODE_VAL;
+  }
+  return 0;
+}
 
 //returns true if point is updated
 //point is passed by reference as it will be modified
@@ -188,13 +266,18 @@ void sendMIDIForHits(HitData hits[]){
 
   for (int i = 0; i < AI_INPUTS_USED; i++){
     if (hits[i].isHit){
+      Serial.print(i);
+      Serial.print(" - ");
+      Serial.print(hits[i].lastValue);
+      Serial.print(" - ");
+      Serial.println(hits[i].velocity);
       noteOn(MIDI_CHANNEL, notePitches[i], hits[i].velocity);
-      MidiUSB.flush();
+      //MidiUSB.flush();
       bitSet(NoteStat,i);
     }
     else if (bitRead(NoteStat,i)){
       noteOff(MIDI_CHANNEL, notePitches[i], 0);
-      MidiUSB.flush();
+      //MidiUSB.flush();
       bitClear(NoteStat,i);
     }
   }
@@ -223,14 +306,16 @@ MIDI handling functions
 // Third parameter is the note number (48 = middle C).
 // Fourth parameter is the velocity (64 = normal, 127 = fastest).
 void noteOn(byte channel, byte pitch, byte velocity) {
-  midiEventPacket_t noteOn = {0x09, 0x90 | channel, pitch, velocity};
-  MidiUSB.sendMIDI(noteOn);
+  usbMIDI.sendNoteOn(pitch, velocity, channel); 
+  //midiEventPacket_t noteOn = {0x09, 0x90 | channel, pitch, velocity};
+  //MidiUSB.sendMIDI(noteOn);
   digitalWrite(led, 1);
   //Serial.print("note On\n");
 }
 void noteOff(byte channel, byte pitch, byte velocity) {
-  midiEventPacket_t noteOff = {0x08, 0x80 | channel, pitch, velocity};
-  MidiUSB.sendMIDI(noteOff);
+  usbMIDI.sendNoteOff(pitch, velocity, channel);
+  //midiEventPacket_t noteOff = {0x08, 0x80 | channel, pitch, velocity};
+  //MidiUSB.sendMIDI(noteOff);
   digitalWrite(led, 0);
   //Serial.print("note Off\n");
   
@@ -240,7 +325,8 @@ void noteOff(byte channel, byte pitch, byte velocity) {
 // Third parameter is the control number number (0-119).
 // Fourth parameter is the control value (0-127).
 void controlChange(byte channel, byte control, byte value) {
-  midiEventPacket_t event = {0x0B, 0xB0 | channel, control, value};
-  MidiUSB.sendMIDI(event);
+  usbMIDI.sendControlChange(control, value, channel);
+  //midiEventPacket_t event = {0x0B, 0xB0 | channel, control, value};
+  //MidiUSB.sendMIDI(event);
   
 }
