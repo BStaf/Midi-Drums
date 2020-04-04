@@ -14,15 +14,16 @@
 //#include "MIDIUSB.h"
 
 #define NUM_BUTTONS  7
-#define AI0 0//21
-#define AI1 1//20
-#define AI2 2//19
-#define AI3 3//18
+#define AI0 0//21 pad
+#define AI1 1//20 pad
+#define AI2 2//19 pad
+#define AI3 3//18 pad
+#define AI4 4//17 kick drum
 
 #define AI_RAW_HIGH 1023 //1030
 #define AI_RAW_LOW 0
 #define AI_EU_HIGH 127
-#define AI_EU_LOW 40
+#define AI_EU_LOW 20
 
 #define AI_HARD_HIT_MODE_VAL 120.0
 #define AI_SOFT_HIT_MODE_VAL 80.0
@@ -36,9 +37,9 @@
 //#define AI_LOW_THRESHOLD 2
 #define DRUM_HIT_DEADBAND 40
 //#define DRUM_MIN_HIT 30
-#define DRUM_HIT_ANALYZE 4 //how many values to read
-#define MIDI_CHANNEL 0
-#define AI_INPUTS_USED 4
+#define DRUM_HIT_ANALYZE 4   //how many values to read
+#define MIDI_CHANNEL 10
+#define AI_INPUTS_USED 5
 
 #define HIT_CACHE_DURATION 5 //loops cache lasts
 #define FASLE_HIT_DEADBAND 20.0 //Velocity for cached hit to cancel false hit
@@ -64,17 +65,17 @@ typedef struct  {
 
 AnalogPoint AIPoints[AI_INPUTS_USED];
 HitData hitDataPoints[AI_INPUTS_USED];
-byte AIInputs[] = {AI0, AI1, AI2, AI3};
+byte AIInputs[] = {AI0, AI1, AI2, AI3, AI4};
 
 float cachedVelocity = 0.0;
 int cachedVelocityTMR = 0;
 
 
-const int AI_Raw_Low_Override[] = {0,0,0,0}; //Increases the RawLow Value
-const int AI_Raw_High_Override[] = {0,200,0,0}; //Decreases the HighRaw Value
+const int AI_Raw_Low_Override[] = {0,0,0,0,400}; //Increases the RawLow Value
+const int AI_Raw_High_Override[] = {0,200,0,0,0}; //Decreases the HighRaw Value by this much
 
 const int intensityPot = 0;  //A0 input
-const byte notePitches[] = {35, 38, 42, 49};
+const byte notePitches[] = {35, 38, 42, 49, 50};
 int NoteStat;
 int AI_MaxCounter;
 int led = 11;
@@ -110,7 +111,7 @@ void setup() {
     hitDataPoints[i].velocity = 0;
     hitDataPoints[i].lastValue = 0;
   }
-  Serial.begin(38400);
+  //Serial.begin(9600);
   updateHitModeLights();
 }
 
@@ -266,18 +267,18 @@ void sendMIDIForHits(HitData hits[]){
 
   for (int i = 0; i < AI_INPUTS_USED; i++){
     if (hits[i].isHit){
-      Serial.print(i);
+      /*Serial.print(i);
       Serial.print(" - ");
       Serial.print(hits[i].lastValue);
       Serial.print(" - ");
-      Serial.println(hits[i].velocity);
+      Serial.println(hits[i].velocity);*/
       noteOn(MIDI_CHANNEL, notePitches[i], hits[i].velocity);
-      //MidiUSB.flush();
+     // usbMIDI.flush();
       bitSet(NoteStat,i);
     }
     else if (bitRead(NoteStat,i)){
       noteOff(MIDI_CHANNEL, notePitches[i], 0);
-      //MidiUSB.flush();
+    //  MidiUSB.flush();
       bitClear(NoteStat,i);
     }
   }
