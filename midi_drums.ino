@@ -42,9 +42,9 @@
 #define AI_INPUTS_USED 5
 
 #define HIT_CACHE_DURATION 5 //loops cache lasts
-#define FASLE_HIT_DEADBAND 20.0 //Velocity for cached hit to cancel false hit
+#define FASLE_HIT_DEADBAND 0.0 //20.0 //Velocity for cached hit to cancel false hit
 
-
+#define IGNORE_HIT_FOR_TIME 20 //msec for base drum hit to be ignored
 
 typedef struct {
   byte AIInputNum;
@@ -69,7 +69,7 @@ byte AIInputs[] = {AI0, AI1, AI2, AI3, AI4};
 
 float cachedVelocity = 0.0;
 int cachedVelocityTMR = 0;
-
+int ignoreHitTimer = 0;
 
 const int AI_Raw_Low_Override[] = {0,0,0,0,400}; //Increases the RawLow Value
 const int AI_Raw_High_Override[] = {0,200,0,0,0}; //Decreases the HighRaw Value by this much
@@ -122,6 +122,9 @@ void loop() {
   }
   //checkHitModeBTN();
   delay(1);
+} 
+void cancelHitForTimeDelay(HitData hitDataPoints, int hitToIgnore){
+  if (hitDataPoints[hitToIgnore])
 }
 
 void checkHitModeBTN(){
