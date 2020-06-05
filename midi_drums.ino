@@ -10,18 +10,19 @@
  * written for a Teensy 2.0
  * Takes 4 AI inputs from Pizo's
  * Processes as drum hits and plays a midi note
+ * Currently setup to work with pizo inputs from rockband drums + bass petal
  **************************************************************/
 //#include "MIDIUSB.h"
 
 #define NUM_BUTTONS  7
-#define AI0 0//21 pad
-#define AI1 1//20 pad
-#define AI2 2//19 pad
-#define AI3 3//18 pad
+#define AI0 3//0//21 pad
+#define AI1 2//1//20 pad
+#define AI2 0//2//19 pad
+#define AI3 1//3//18 pad
 #define AI4 4//17 kick drum
 
 #define AI_RAW_HIGH 1023 //1030
-#define AI_RAW_LOW 0
+#define AI_RAW_LOW 100
 #define AI_EU_HIGH 127
 #define AI_EU_LOW 20
 
@@ -35,7 +36,7 @@
 
 //#define AI_HIGH_THRESHOLD 10
 //#define AI_LOW_THRESHOLD 2
-#define DRUM_HIT_DEADBAND 40
+#define DRUM_HIT_DEADBAND 20
 //#define DRUM_MIN_HIT 30
 #define DRUM_HIT_ANALYZE 4   //how many values to read
 #define MIDI_CHANNEL 10
@@ -75,7 +76,8 @@ const int AI_Raw_Low_Override[] = {0,0,0,0,400}; //Increases the RawLow Value
 const int AI_Raw_High_Override[] = {0,200,0,0,0}; //Decreases the HighRaw Value by this much
 
 const int intensityPot = 0;  //A0 input
-const byte notePitches[] = {35, 38, 42, 49, 50};
+const byte notePitches[] = {38, 42, 50, 49, 35};
+//const byte notePitches[] = {38, 50, 49, 42, 35};
 int NoteStat;
 int AI_MaxCounter;
 int led = 11;
@@ -123,9 +125,9 @@ void loop() {
   //checkHitModeBTN();
   delay(1);
 } 
-void cancelHitForTimeDelay(HitData hitDataPoints, int hitToIgnore){
+/*void cancelHitForTimeDelay(HitData hitDataPoints, int hitToIgnore){
   if (hitDataPoints[hitToIgnore])
-}
+}*/
 
 void checkHitModeBTN(){
   button10.update();
@@ -222,13 +224,13 @@ void analyzePointForHit(AnalogPoint *point, HitData *hit){
     hit->velocity = scaleAI(hit->lastValue, AI_RAW_HIGH - point->AIHighRawTweak, AI_RAW_LOW + point->AILowRawTweak, AI_EU_HIGH, AI_EU_LOW);
     
     //check if a false hit --feedback from a different hit
-    if ((cachedVelocity - hit->velocity) > FASLE_HIT_DEADBAND){
-      hit->isHit = false;
-    }
-    else{
+    //if ((cachedVelocity - hit->velocity) > FASLE_HIT_DEADBAND){
+    //  hit->isHit = false;
+    //}
+    //else{
       hit->velocity = getVeloictyForMode(hit->velocity);
       //digitalWrite(led, 0);
-    }
+    //}
   }
 }
 
